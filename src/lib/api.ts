@@ -1,0 +1,384 @@
+const getDefaultApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    // If loaded in a web browser pointing to our Express server (e.g. on a phone or client browser)
+    // window.location.origin will be 'http://<host-ip>:5001' or similar.
+    // If the protocol is http/https and it is not Vite's dev port (5173), use the current window origin!
+    const { protocol, port, origin } = window.location;
+    if ((protocol === 'http:' || protocol === 'https:') && port !== '5173') {
+      return `${origin}/api`;
+    }
+  }
+  return (import.meta.env as any).VITE_API_URL || 'http://localhost:5001/api';
+};
+
+const getStoredHost = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('erp_host_address');
+  }
+  return null;
+};
+
+export let API_URL = getStoredHost() 
+  ? `${getStoredHost()}/api` 
+  : getDefaultApiUrl();
+
+export let BASE_URL = API_URL.replace(/\/api$/, '');
+
+export const setApiUrl = (newUrl: string | null) => {
+  if (newUrl) {
+    const cleanUrl = newUrl.replace(/\/$/, ''); // strip trailing slash
+    localStorage.setItem('erp_host_address', cleanUrl);
+    API_URL = `${cleanUrl}/api`;
+  } else {
+    localStorage.removeItem('erp_host_address');
+    API_URL = getDefaultApiUrl();
+  }
+  BASE_URL = API_URL.replace(/\/api$/, '');
+};
+
+async function handleError(res: Response, fallback: string): Promise<never> {
+  let message = fallback;
+  try {
+    const err = await res.json();
+    if (err && err.error) {
+      message = err.error;
+    }
+  } catch (_) {}
+  throw new Error(message);
+}
+
+export const api = {
+  auth: {
+    login: async (email: string, password?: string) => {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Authentication failed');
+      }
+      const data = await res.json();
+      return { data, error: null };
+    },
+    register: async (email: string, password?: string, name?: string, role?: string) => {
+      const res = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name, role })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Registration failed');
+      }
+      const data = await res.json();
+      return { data, error: null };
+    },
+    getUser: async () => {
+      // Mock session retrieval for frontend user parsing
+      const localUserStr = localStorage.getItem('erp_user');
+      if (localUserStr) {
+        const user = JSON.parse(localUserStr);
+        return { data: { user }, error: null };
+      }
+      // If none set, fallback to a default admin for developer comfort
+      const defaultUser = { id: 'u2', email: 'admin@hardware.com', role: 'admin', name: 'Steven Clark' };
+      return { data: { user: defaultUser }, error: null };
+    }
+  },
+
+  products: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/products`);
+      if (!res.ok) await handleError(res, 'Failed to fetch inventory products');
+      return res.json();
+    },
+    save: async (data: any, id?: string) => {
+      const res = await fetch(`${API_URL}/products${id ? `/${id}` : ''}`, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) await handleError(res, 'Failed to save product in local database');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/products/${id}`, { method: 'DELETE' });
+      if (!res.ok) await handleError(res, 'Failed to delete product from database');
+      return res.json();
+    }
+  },
+
+  customers: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/customers`);
+      if (!res.ok) throw new Error('Failed to fetch customers');
+      return res.json();
+    },
+    save: async (data: any, id?: string) => {
+      const res = await fetch(`${API_URL}/customers${id ? `/${id}` : ''}`, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to save customer details');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/customers/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to remove customer');
+      return res.json();
+    }
+  },
+
+  suppliers: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/suppliers`);
+      if (!res.ok) throw new Error('Failed to fetch suppliers');
+      return res.json();
+    },
+    save: async (data: any, id?: string) => {
+      const res = await fetch(`${API_URL}/suppliers${id ? `/${id}` : ''}`, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to save supplier details');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/suppliers/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to remove supplier');
+      return res.json();
+    }
+  },
+
+  sales: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/sales`);
+      if (!res.ok) throw new Error('Failed to fetch sales history');
+      return res.json();
+    },
+    save: async (data: any) => {
+      const res = await fetch(`${API_URL}/sales`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Local POS checkout failed');
+      }
+      return res.json();
+    },
+    markAsPaid: async (id: string) => {
+      const res = await fetch(`${API_URL}/sales/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'paid' })
+      });
+      if (!res.ok) throw new Error('Failed to update sale status');
+      return res.json();
+    },
+    void: async (id: string, userEmail: string) => {
+      const res = await fetch(`${API_URL}/sales/${id}/void`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email: userEmail })
+      });
+      if (!res.ok) throw new Error('Failed to void invoice');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/sales/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete sale from database');
+      return res.json();
+    }
+  },
+
+  purchaseOrders: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/purchase-orders`);
+      if (!res.ok) throw new Error('Failed to fetch purchase orders');
+      return res.json();
+    },
+    save: async (data: any) => {
+      const res = await fetch(`${API_URL}/purchase-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to insert purchase order');
+      return res.json();
+    },
+    receive: async (id: string) => {
+      const res = await fetch(`${API_URL}/purchase-orders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'received' })
+      });
+      if (!res.ok) throw new Error('Failed to check in purchase order stock');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/purchase-orders/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete purchase order from database');
+      return res.json();
+    }
+  },
+
+  employees: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/employees`);
+      if (!res.ok) throw new Error('Failed to load employee profiles');
+      return res.json();
+    },
+    save: async (data: any, id?: string) => {
+      const res = await fetch(`${API_URL}/employees${id ? `/${id}` : ''}`, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to save staff logs');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/employees/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete staff member');
+      return res.json();
+    }
+  },
+
+  transactions: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/transactions`);
+      if (!res.ok) throw new Error('Failed to fetch financial ledger');
+      return res.json();
+    },
+    save: async (data: any) => {
+      const res = await fetch(`${API_URL}/transactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to log cash flow transaction');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/transactions/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to remove transaction record');
+      return res.json();
+    }
+  },
+
+  settings: {
+    get: async () => {
+      const res = await fetch(`${API_URL}/settings`);
+      if (!res.ok) throw new Error('Failed to load shop settings');
+      return res.json();
+    },
+    save: async (data: any) => {
+      const res = await fetch(`${API_URL}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to commit system configurations');
+      return res.json();
+    }
+  },
+
+  profiles: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/profiles`);
+      if (!res.ok) throw new Error('Failed to fetch user profiles');
+      return res.json();
+    },
+    save: async (data: any, id: string) => {
+      const res = await fetch(`${API_URL}/profiles/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to update profile configurations');
+      return res.json();
+    },
+    changePassword: async (id: string, password?: string) => {
+      const res = await fetch(`${API_URL}/profiles/${id}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      if (!res.ok) throw new Error('Failed to update password');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/profiles/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete staff user profile');
+      return res.json();
+    }
+  },
+
+  auditLogs: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/audit_logs`);
+      if (!res.ok) throw new Error('Failed to fetch audit logs');
+      return res.json();
+    },
+    log: async (userEmail: string, action: string, details: string) => {
+      const res = await fetch(`${API_URL}/audit_logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email: userEmail, action, details })
+      });
+      if (!res.ok) throw new Error('Failed to log audit details');
+      return res.json();
+    }
+  },
+
+  quotations: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/quotations`);
+      if (!res.ok) throw new Error('Failed to fetch quotations');
+      return res.json();
+    },
+    save: async (data: any) => {
+      const res = await fetch(`${API_URL}/quotations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to save quotation');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/quotations/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete quotation');
+      return res.json();
+    }
+  },
+
+  deliveryNotes: {
+    getAll: async () => {
+      const res = await fetch(`${API_URL}/delivery_notes`);
+      if (!res.ok) throw new Error('Failed to fetch delivery notes');
+      return res.json();
+    },
+    save: async (data: any) => {
+      const res = await fetch(`${API_URL}/delivery_notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error('Failed to save delivery note');
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`${API_URL}/delivery_notes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete delivery note');
+      return res.json();
+    }
+  }
+};
+

@@ -6,7 +6,9 @@ import {
   CheckCircleIcon,
   XIcon,
   DownloadIcon,
-  Loader2Icon
+  Loader2Icon,
+  Trash2Icon,
+  AlertTriangleIcon
 } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { supabase } from '../lib/supabaseClient';
@@ -38,6 +40,7 @@ export function Purchasing() {
   const [productSearch, setProductSearch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [viewOrder, setViewOrder] = useState<PurchaseOrder | null>(null);
+  const [selectedPoIds, setSelectedPoIds] = useState<string[]>([]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -45,8 +48,14 @@ export function Purchasing() {
       const { data: prodData } = await supabase.from('products').select('*');
       if (prodData) {
         setProducts(prodData);
-        const uniqueSuppliers = Array.from(new Set(prodData.map((p) => p.supplier).filter(Boolean))) as string[];
-        setSuppliers(uniqueSuppliers);
+        
+        const { data: supplierData } = await supabase.from('suppliers').select('*');
+        if (supplierData && supplierData.length > 0) {
+          setSuppliers(supplierData.map((s: any) => s.name));
+        } else {
+          const uniqueSuppliers = Array.from(new Set(prodData.map((p) => p.supplier).filter(Boolean))) as string[];
+          setSuppliers(uniqueSuppliers);
+        }
       }
 
       const { data: poData } = await supabase
@@ -57,10 +66,10 @@ export function Purchasing() {
       if (poData) {
         const mappedOrders = poData.map(po => ({
           ...po,
-          poNumber: po.po_number,
-          supplierName: po.supplier_name,
-          dueDate: po.due_date,
-          date: new Date(po.created_at).toLocaleDateString()
+          poNumber: po.po_number !== undefined ? po.po_number : po.poNumber,
+          supplierName: po.supplier_name !== undefined ? po.supplier_name : po.supplierName,
+          dueDate: po.due_date !== undefined ? po.due_date : po.dueDate,
+          date: po.created_at ? new Date(po.created_at).toLocaleDateString() : (po.date || new Date().toLocaleDateString())
         }));
         setOrders(mappedOrders);
       }
@@ -71,7 +80,10 @@ export function Purchasing() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [tab]);
+  useEffect(() => {
+    setSelectedPoIds([]);
+    fetchData();
+  }, [tab]);
 
   // --- PDF PURCHASE ORDER GENERATOR ---
   const downloadPO_PDF = (order: PurchaseOrder) => {
@@ -80,8 +92,8 @@ export function Purchasing() {
     const pageHeight = doc.internal.pageSize.getHeight();
 
     // Theme Colors for PDF
-    const gold = [218, 165, 32];
-    const darkSilver = [70, 70, 70];
+    const gold = [218, 165, 32] as [number, number, number];
+    const darkSilver = [70, 70, 70] as [number, number, number];
 
     // Background shapes
     doc.setFillColor(darkSilver[0], darkSilver[1], darkSilver[2]);
@@ -93,9 +105,9 @@ export function Purchasing() {
 
     try {
       // LOGO: Expanded and positioned
-      doc.addImage('/images/logo.png', 'PNG', pageWidth - 63.5, 2.5, 42, 42);
+      doc.addImage('./images/logo.png', 'PNG', pageWidth - 63.5, 2.5, 42, 42);
     } catch(e) {
-      console.warn("Logo not found at /images/logo.png");
+      console.warn("Logo not found at ./images/logo.png");
     }
 
     // Title text: Centered below the dark header
@@ -213,8 +225,8 @@ export function Purchasing() {
           productId: product.id,
           productName: product.name,
           qty: 1,
-          costPrice: product.cost_price || product.costPrice || 0,
-          total: product.cost_price || product.costPrice || 0
+          costPrice: product.costPrice || 0,
+          total: product.costPrice || 0
         }
       ];
     });
@@ -234,7 +246,40 @@ export function Purchasing() {
   const poTotal = poItems.reduce((sum, i) => sum + i.total, 0);
 
   const createPO = async () => {
-    if (!selectedSupplier || poItems.length === 0) return;
+    if (!selectedSupplier) {
+      alert("Please select a registered supplier.");
+      return;
+    }
+    if (poItems.length === 0) {
+      alert("Please add at least one item to generate a Purchase Order.");
+      return;
+    }
+
+    if (!dueDate) {
+      alert("Please select an expected delivery date.");
+      return;
+    }
+    
+    const selectedDate = new Date(dueDate);
+    const today = new Date();
+    selectedDate.setHours(0,0,0,0);
+    today.setHours(0,0,0,0);
+    if (selectedDate < today) {
+      alert("Expected delivery date cannot be in the past.");
+      return;
+    }
+
+    for (const item of poItems) {
+      if (item.qty < 1) {
+        alert(`Quantity for ${item.productName} must be at least 1.`);
+        return;
+      }
+      if (item.costPrice <= 0) {
+        alert(`Unit cost for ${item.productName} must be greater than 0.`);
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -271,8 +316,96 @@ export function Purchasing() {
     } catch (err: any) { alert(err.message); }
   };
 
+  const allFilteredSelected = orders.length > 0 && orders.every((order) => selectedPoIds.includes(order.id));
+
+  const handleToggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedPoIds((prev) => prev.filter((id) => !orders.some((order) => order.id === id)));
+    } else {
+      setSelectedPoIds((prev) => Array.from(new Set([...prev, ...orders.map((order) => order.id)])));
+    }
+  };
+
+  const handleToggleSelectPo = (orderId: string) => {
+    setSelectedPoIds((prev) =>
+      prev.includes(orderId)
+        ? prev.filter((id) => id !== orderId)
+        : [...prev, orderId]
+    );
+  };
+
+  const handleDeleteOrder = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this purchase order?")) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.from('purchase_orders').delete().eq('id', id);
+      if (error) throw error;
+      setSelectedPoIds((prev) => prev.filter((selectedId) => selectedId !== id));
+      fetchData();
+    } catch (err: any) {
+      alert("Failed to delete purchase order: " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBulkDeleteOrders = async () => {
+    if (selectedPoIds.length === 0) return;
+    if (!window.confirm(`Are you sure you want to delete the ${selectedPoIds.length} selected purchase orders?`)) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const results: any[] = [];
+      for (const orderId of selectedPoIds) {
+        const res = await supabase.from('purchase_orders').delete().eq('id', orderId);
+        results.push(res);
+      }
+      const firstError = results.find((r: any) => r?.error);
+      if (firstError) throw firstError.error;
+      setSelectedPoIds([]);
+      fetchData();
+    } catch (err: any) {
+      alert("Failed to delete selected purchase orders: " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteAllOrders = async () => {
+    if (orders.length === 0) return;
+    if (!window.confirm("WARNING: Are you sure you want to delete ALL purchase orders? This action is permanent and cannot be undone.")) {
+      return;
+    }
+    
+    if (!window.confirm("Confirm once more: Do you really want to clear the entire purchase order history?")) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const results: any[] = [];
+      for (const order of orders) {
+        const res = await supabase.from('purchase_orders').delete().eq('id', order.id);
+        results.push(res);
+      }
+      const firstError = results.find((r: any) => r?.error);
+      if (firstError) throw firstError.error;
+      setSelectedPoIds([]);
+      fetchData();
+    } catch (err: any) {
+      alert("Failed to delete all purchase orders: " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="p-6 space-y-4 animate-in fade-in duration-500">
+    <div className="p-4 sm:p-6 space-y-4 animate-in fade-in duration-500">
       <div className="flex gap-1 bg-white p-1 rounded-xl w-fit border border-gray-200 shadow-sm">
         <button onClick={() => setTab('new')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${tab === 'new' ? 'bg-[#464646] text-white shadow-md' : 'text-gray-500 hover:text-[#464646] hover:bg-gray-50'}`}>New Order</button>
         <button onClick={() => setTab('history')} className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${tab === 'history' ? 'bg-[#464646] text-white shadow-md' : 'text-gray-500 hover:text-[#464646] hover:bg-gray-50'}`}>Order History</button>
@@ -301,7 +434,7 @@ export function Purchasing() {
                     {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()) && productSearch.length > 0).map((p) => (
                       <button key={p.id} onClick={() => addItem(p)} className="w-full flex justify-between items-center px-5 py-4 hover:bg-gray-50 text-sm transition-colors border-b border-gray-50 last:border-0 text-left">
                         <span className="font-black text-[#464646]">{p.name}</span>
-                        <span className="font-black text-[#DAA520]">{symbol} {convert(p.cost_price || p.costPrice || 0).toLocaleString()}</span>
+                        <span className="font-black text-[#DAA520]">{symbol} {convert(p.costPrice || 0).toLocaleString()}</span>
                       </button>
                     ))}
                   </div>
@@ -309,19 +442,29 @@ export function Purchasing() {
               </div>
 
               {poItems.length > 0 ? (
-                <div className="overflow-x-auto mt-6">
+                <div className="overflow-x-auto mt-6 border border-slate-100 rounded-2xl">
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 border-b border-gray-100 text-[10px] uppercase font-black text-gray-400 tracking-widest">
-                            <tr><th className="py-4 px-4">Item Name</th><th className="py-4 text-center">Qty</th><th className="py-4 text-right">Cost Price ({symbol})</th><th className="py-4 text-right px-4">Total</th><th className="py-4"></th></tr>
+                        <thead className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-400 tracking-widest">
+                            <tr>
+                              <th className="py-4 px-6">Item Name</th>
+                              <th className="py-4 text-center">Qty</th>
+                              <th className="py-4 text-right">Cost Price ({symbol})</th>
+                              <th className="py-4 text-right px-6">Total</th>
+                              <th className="py-4"></th>
+                            </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-slate-50">
                             {poItems.map((item) => (
-                                <tr key={item.productId} className="group hover:bg-gray-50/50 transition-colors">
-                                    <td className="py-4 px-4 font-black text-[#464646]">{item.productName}</td>
-                                    <td className="py-4 text-center"><input type="number" min={1} value={item.qty} onChange={(e) => updateItem(item.productId, 'qty', parseInt(e.target.value) || 1)} className="w-16 text-center border border-gray-200 rounded-lg py-1.5 font-bold text-[#464646] focus:ring-2 focus:ring-[#DAA520] outline-none" /></td>
-                                    <td className="py-4 text-right"><input type="number" step="0.01" value={item.costPrice} onChange={(e) => updateItem(item.productId, 'costPrice', parseFloat(e.target.value) || 0)} className="w-24 text-right border border-gray-200 rounded-lg py-1.5 px-3 font-bold text-[#464646] focus:ring-2 focus:ring-[#DAA520] outline-none" /></td>
-                                    <td className="py-4 text-right font-black text-[#DAA520] px-4">{symbol} {convert(item.total).toLocaleString()}</td>
-                                    <td className="py-4 text-right"><button onClick={() => setPoItems(poItems.filter(i => i.productId !== item.productId))} className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"><XIcon className="w-4 h-4" /></button></td>
+                                <tr key={item.productId} className="group hover:bg-teal-50/20 transition-colors">
+                                    <td className="py-4 px-6 font-black text-slate-800">{item.productName}</td>
+                                    <td className="py-4 text-center"><input type="number" min={1} value={item.qty} onChange={(e) => updateItem(item.productId, 'qty', parseInt(e.target.value) || 1)} className="w-16 text-center border border-slate-200 bg-white rounded-lg py-1.5 font-bold text-slate-800 focus:ring-2 focus:ring-[#DAA520] outline-none" /></td>
+                                    <td className="py-4 text-right"><input type="number" step="0.01" value={item.costPrice === 0 ? '' : item.costPrice} onChange={(e) => updateItem(item.productId, 'costPrice', parseFloat(e.target.value) || 0)} className="w-24 text-right border border-slate-200 bg-white rounded-lg py-1.5 px-3 font-bold text-slate-800 focus:ring-2 focus:ring-[#DAA520] outline-none" /></td>
+                                    <td className="py-4 text-right font-black text-[#DAA520] px-6">{symbol} {convert(item.total).toLocaleString()}</td>
+                                    <td className="py-4 text-center px-4">
+                                      <button onClick={() => setPoItems(poItems.filter(i => i.productId !== item.productId))} className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-500 hover:text-white border border-red-100 transition-all shadow-sm shadow-red-500/10">
+                                        <XIcon className="w-4 h-4" />
+                                      </button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -344,7 +487,7 @@ export function Purchasing() {
                     <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl font-bold text-[#464646] outline-none focus:ring-2 focus:ring-[#DAA520] transition-all" />
                 </div>
                 <div className="pt-5 border-t border-gray-100 space-y-4">
-                    <div className="flex justify-between text-sm font-black text-gray-400 uppercase tracking-widest"><span>SKU Count</span><span className="font-black text-[#464646]">{poItems.length}</span></div>
+                    <div className="flex justify-between text-sm font-black text-gray-400 uppercase tracking-widest"><span>SKU Count</span><span className="font-black text-[#464646]">{poItems.reduce((sum, item) => sum + (item.qty || 0), 0)}</span></div>
                     <div className="flex justify-between font-black text-2xl text-[#464646] pt-5 border-t-2 border-dashed border-gray-200">
                         <span className="uppercase tracking-widest text-lg flex items-center">Total Pay</span><span className="text-[#DAA520]">{symbol} {convert(poTotal).toLocaleString()}</span>
                     </div>
@@ -359,46 +502,104 @@ export function Purchasing() {
       )}
 
       {tab === 'history' && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-in slide-in-from-right-4 duration-500">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                <tr>
-                    <th className="px-6 py-5">PO Reference</th>
-                    <th className="px-6 py-5">Created On</th>
-                    <th className="px-6 py-5">Supplier Name</th>
-                    <th className="px-6 py-5 text-center">SKUs</th>
-                    <th className="px-6 py-5">Arrival Date</th>
-                    <th className="px-6 py-5 text-right">Grand Total ({symbol})</th>
-                    <th className="px-6 py-5 text-center">Status</th>
-                    <th className="px-6 py-5 text-center">Actions</th>
-                </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                {orders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 font-black text-[#464646]">{order.poNumber}</td>
-                    <td className="px-6 py-4 text-gray-500 font-bold">{order.date}</td>
-                    <td className="px-6 py-4 font-black text-[#464646]">{order.supplierName}</td>
-                    <td className="px-6 py-4 text-center"><span className="bg-gray-100 text-gray-500 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest">{order.items?.length || 0} ITEMS</span></td>
-                    <td className="px-6 py-4 text-gray-500 font-bold">{order.dueDate}</td>
-                    <td className="px-6 py-4 text-right font-black text-[#DAA520]">{symbol} {convert(order.total).toLocaleString()}</td>
-                    <td className="px-6 py-4 text-center">
-                        <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${statusColors[order.status]}`}>{order.status}</span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                        <div className="flex gap-2 justify-center">
-                        <button onClick={() => setViewOrder(order)} className="text-[10px] font-black uppercase tracking-widest bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg text-gray-600 transition-all">Details</button>
-                        <button onClick={() => downloadPO_PDF(order)} className="p-2 text-gray-400 hover:text-[#DAA520] hover:bg-[#DAA520]/10 rounded-lg transition-all" title="Download PDF"><DownloadIcon className="w-5 h-5" /></button>
-                        {order.status === 'pending' && (
-                            <button onClick={() => receiveOrder(order)} className="text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white px-4 py-2 rounded-lg transition-all flex items-center gap-1.5 shadow-sm"><CheckCircleIcon className="w-3.5 h-3.5" /> Receive</button>
-                        )}
-                        </div>
-                    </td>
-                    </tr>
-                ))}
-                </tbody>
-            </table>
+        <div className="space-y-4 animate-in slide-in-from-right-4 duration-500">
+          {/* Controls toolbar */}
+          <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+            <h3 className="text-sm font-black text-[#464646] uppercase tracking-widest">Order History List</h3>
+            <button 
+              onClick={handleDeleteAllOrders} 
+              disabled={orders.length === 0}
+              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-300 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-red-600/20 transition-all uppercase tracking-widest shrink-0"
+            >
+              <Trash2Icon className="w-4 h-4" /> Delete All Orders
+            </button>
+          </div>
+
+          {/* Bulk Actions Banner */}
+          {selectedPoIds.length > 0 && (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4 animate-in slide-in-from-top-5 duration-300">
+              <div className="flex items-center gap-2.5 text-red-800 font-bold text-sm">
+                <AlertTriangleIcon className="w-5 h-5 text-red-600 animate-pulse" />
+                <span>{selectedPoIds.length} purchase order(s) selected for bulk actions</span>
+              </div>
+              <button
+                onClick={handleBulkDeleteOrders}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-red-600/20 transition-all uppercase tracking-widest shrink-0"
+              >
+                <Trash2Icon className="w-4 h-4" /> Delete Selected
+              </button>
+            </div>
+          )}
+
+          {/* Table Container */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-lg overflow-hidden text-left">
+            {/* Table Header with gradient */}
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-white">Purchase Orders Ledger</h3>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Track purchase orders, delivery statuses, totals, and receipts</p>
+              </div>
+              <span className="px-3 py-1.5 bg-teal-500/20 text-teal-400 text-xs font-black rounded-full border border-teal-500/30">
+                {orders.length} Purchase Orders
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <tr>
+                      <th className="px-6 py-4 text-center w-[50px]">
+                        <input
+                          type="checkbox"
+                          checked={allFilteredSelected}
+                          onChange={handleToggleSelectAll}
+                          className="rounded border-gray-300 text-[#DAA520] focus:ring-[#DAA520] cursor-pointer w-4 h-4"
+                        />
+                      </th>
+                      <th className="px-6 py-4">PO Reference</th>
+                      <th className="px-6 py-4">Created On</th>
+                      <th className="px-6 py-4">Supplier Name</th>
+                      <th className="px-6 py-4 text-center">SKUs</th>
+                      <th className="px-6 py-4">Arrival Date</th>
+                      <th className="px-6 py-4 text-right">Grand Total ({symbol})</th>
+                      <th className="px-6 py-4 text-center">Status</th>
+                      <th className="px-6 py-4 text-center">Actions</th>
+                  </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                  {orders.map((order) => (
+                      <tr key={order.id} className="hover:bg-teal-50/20 transition-colors group">
+                      <td className="px-6 py-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedPoIds.includes(order.id)}
+                          onChange={() => handleToggleSelectPo(order.id)}
+                          className="rounded border-gray-300 text-[#DAA520] focus:ring-[#DAA520] cursor-pointer w-4 h-4"
+                        />
+                      </td>
+                      <td className="px-6 py-4 font-black text-slate-800">{order.poNumber}</td>
+                      <td className="px-6 py-4 text-slate-500 font-bold">{order.date}</td>
+                      <td className="px-6 py-4 font-black text-slate-800">{order.supplierName}</td>
+                      <td className="px-6 py-4 text-center"><span className="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider">{order.items?.length || 0} ITEMS</span></td>
+                      <td className="px-6 py-4 text-slate-500 font-bold">{order.dueDate}</td>
+                      <td className="px-6 py-4 text-right font-black text-[#DAA520]">{symbol} {convert(order.total).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-center">
+                          <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${statusColors[order.status]}`}>{order.status}</span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                          <div className="flex gap-2 justify-center items-center">
+                            <button onClick={() => setViewOrder(order)} className="text-[10px] font-black uppercase tracking-widest bg-slate-50 border border-slate-200 hover:bg-slate-200 px-4 py-2.5 rounded-xl text-slate-600 transition-all shadow-sm">Details</button>
+                            <button onClick={() => downloadPO_PDF(order)} className="p-2.5 rounded-xl bg-slate-50 text-slate-500 hover:bg-[#DAA520] hover:text-white border border-slate-100 transition-all shadow-sm" title="Download PDF"><DownloadIcon className="w-5 h-5" /></button>
+                            {order.status === 'pending' && (
+                                <button onClick={() => receiveOrder(order)} className="text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white border border-emerald-100 px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-500/10"><CheckCircleIcon className="w-3.5 h-3.5" /> Receive</button>
+                            )}
+                            <button onClick={() => handleDeleteOrder(order.id)} className="p-2.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-500 hover:text-white border border-red-100 transition-all shadow-sm shadow-red-500/10" title="Delete Order"><Trash2Icon className="w-5 h-5" /></button>
+                          </div>
+                      </td>
+                      </tr>
+                  ))}
+                  </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -420,26 +621,28 @@ export function Purchasing() {
               </div>
             </div>
             
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
-                <tr>
-                    <th className="py-4 px-4">Item Catalog Desc.</th>
-                    <th className="py-4 text-center">Qty</th>
-                    <th className="py-4 text-right">Unit Rate</th>
-                    <th className="py-4 text-right px-6">Total Cost</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {viewOrder.items.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/50 transition-all">
-                    <td className="py-4 px-4 font-black text-[#464646]">{item.productName}</td>
-                    <td className="py-4 text-center font-black text-gray-500">{item.qty}</td>
-                    <td className="py-4 text-right font-bold text-gray-500">{symbol} {convert(item.costPrice).toLocaleString()}</td>
-                    <td className="py-4 text-right px-6 font-black text-[#DAA520]">{symbol} {convert(item.total).toLocaleString()}</td>
+            <div className="border border-slate-100 rounded-2xl overflow-hidden text-left">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                  <tr>
+                      <th className="py-4 px-6">Item Catalog Desc.</th>
+                      <th className="py-4 text-center">Qty</th>
+                      <th className="py-4 text-right">Unit Rate</th>
+                      <th className="py-4 text-right px-6">Total Cost</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {viewOrder.items.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-teal-50/20 transition-all">
+                      <td className="py-4 px-6 font-black text-slate-800">{item.productName}</td>
+                      <td className="py-4 text-center font-black text-slate-500">{item.qty}</td>
+                      <td className="py-4 text-right font-bold text-slate-500">{symbol} {convert(item.costPrice).toLocaleString()}</td>
+                      <td className="py-4 text-right px-6 font-black text-[#DAA520]">{symbol} {convert(item.total).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             
             <div className="bg-[#464646] text-white p-8 rounded-[32px] shadow-2xl relative overflow-hidden flex justify-between items-center">
               <div className="absolute top-0 right-0 w-48 h-48 bg-[#DAA520]/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>

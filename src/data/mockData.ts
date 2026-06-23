@@ -347,7 +347,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so1',
   invoiceNo: 'INV-2024-001',
-  customerId: 'c1',
+  customer_id: 'c1',
   customerName: 'John Smith',
   items: [
   {
@@ -355,14 +355,16 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'Power Drill 18V',
     qty: 1,
     price: 89.99,
-    total: 89.99
+    total: 89.99,
+    taxRate: 0
   },
   {
     productId: 'p7',
     productName: 'Measuring Tape 25ft',
     qty: 2,
     price: 18.99,
-    total: 37.98
+    total: 37.98,
+    taxRate: 0
   }],
 
   subtotal: 127.97,
@@ -376,7 +378,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so2',
   invoiceNo: 'INV-2024-002',
-  customerId: 'c2',
+  customer_id: 'c2',
   customerName: 'Maria Garcia',
   items: [
   {
@@ -384,14 +386,16 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'Circuit Breaker 20A',
     qty: 3,
     price: 24.99,
-    total: 74.97
+    total: 74.97,
+    taxRate: 0
   },
   {
     productId: 'p11',
     productName: 'Wire 12AWG',
     qty: 2,
     price: 45.99,
-    total: 91.98
+    total: 91.98,
+    taxRate: 0
   }],
 
   subtotal: 166.95,
@@ -405,7 +409,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so3',
   invoiceNo: 'INV-2024-003',
-  customerId: 'c3',
+  customer_id: 'c3',
   customerName: 'Bob Johnson',
   items: [
   {
@@ -413,14 +417,16 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'Wood Screws 2"',
     qty: 5,
     price: 8.99,
-    total: 44.95
+    total: 44.95,
+    taxRate: 0
   },
   {
     productId: 'p12',
     productName: 'Sandpaper 120 Grit',
     qty: 3,
     price: 5.99,
-    total: 17.97
+    total: 17.97,
+    taxRate: 0
   }],
 
   subtotal: 62.92,
@@ -434,7 +440,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so4',
   invoiceNo: 'INV-2024-004',
-  customerId: 'c4',
+  customer_id: 'c4',
   customerName: 'Sarah Williams',
   items: [
   {
@@ -442,21 +448,24 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'Angle Grinder 4.5"',
     qty: 1,
     price: 65.99,
-    total: 65.99
+    total: 65.99,
+    taxRate: 0
   },
   {
     productId: 'p8',
     productName: 'Safety Helmet',
     qty: 2,
     price: 22.99,
-    total: 45.98
+    total: 45.98,
+    taxRate: 0
   },
   {
     productId: 'p14',
     productName: 'Work Gloves',
     qty: 3,
     price: 9.99,
-    total: 29.97
+    total: 29.97,
+    taxRate: 0
   }],
 
   subtotal: 141.94,
@@ -470,7 +479,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so5',
   invoiceNo: 'INV-2024-005',
-  customerId: 'c5',
+  customer_id: 'c5',
   customerName: 'Mike Davis',
   items: [
   {
@@ -478,14 +487,16 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'PVC Pipe 1/2"',
     qty: 20,
     price: 3.49,
-    total: 69.8
+    total: 69.8,
+    taxRate: 0
   },
   {
     productId: 'p10',
     productName: 'PVC Elbow 90°',
     qty: 10,
     price: 1.99,
-    total: 19.9
+    total: 19.9,
+    taxRate: 0
   }],
 
   subtotal: 89.7,
@@ -499,7 +510,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so6',
   invoiceNo: 'INV-2024-006',
-  customerId: 'c6',
+  customer_id: 'c6',
   customerName: 'Lisa Chen',
   items: [
   {
@@ -507,14 +518,16 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'Power Drill 18V',
     qty: 2,
     price: 89.99,
-    total: 179.98
+    total: 179.98,
+    taxRate: 0
   },
   {
     productId: 'p13',
     productName: 'Level 24"',
     qty: 1,
     price: 29.99,
-    total: 29.99
+    total: 29.99,
+    taxRate: 0
   }],
 
   subtotal: 209.97,
@@ -528,7 +541,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so7',
   invoiceNo: 'INV-2024-007',
-  customerId: 'c7',
+  customer_id: 'c7',
   customerName: 'Tom Wilson',
   items: [
   {
@@ -536,14 +549,16 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'Hammer 16oz',
     qty: 2,
     price: 12.99,
-    total: 25.98
+    total: 25.98,
+    taxRate: 0
   },
   {
     productId: 'p15',
     productName: 'Caulk Gun',
     qty: 1,
     price: 14.99,
-    total: 14.99
+    total: 14.99,
+    taxRate: 0
   }],
 
   subtotal: 40.97,
@@ -557,7 +572,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so8',
   invoiceNo: 'INV-2024-008',
-  customerId: 'c8',
+  customer_id: 'c8',
   customerName: 'Emma Brown',
   items: [
   {
@@ -565,14 +580,16 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'Paint Brush Set',
     qty: 2,
     price: 15.99,
-    total: 31.98
+    total: 31.98,
+    taxRate: 0
   },
   {
     productId: 'p12',
     productName: 'Sandpaper 120 Grit',
     qty: 4,
     price: 5.99,
-    total: 23.96
+    total: 23.96,
+    taxRate: 0
   }],
 
   subtotal: 55.94,
@@ -586,7 +603,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so9',
   invoiceNo: 'INV-2024-009',
-  customerId: 'c1',
+  customer_id: 'c1',
   customerName: 'John Smith',
   items: [
   {
@@ -594,7 +611,8 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'Circuit Breaker 20A',
     qty: 2,
     price: 24.99,
-    total: 49.98
+    total: 49.98,
+    taxRate: 0
   }],
 
   subtotal: 49.98,
@@ -608,7 +626,7 @@ export const mockSaleOrders: SaleOrder[] = [
 {
   id: 'so10',
   invoiceNo: 'INV-2024-010',
-  customerId: 'c2',
+  customer_id: 'c2',
   customerName: 'Maria Garcia',
   items: [
   {
@@ -616,14 +634,16 @@ export const mockSaleOrders: SaleOrder[] = [
     productName: 'Safety Helmet',
     qty: 5,
     price: 22.99,
-    total: 114.95
+    total: 114.95,
+    taxRate: 0
   },
   {
     productId: 'p14',
     productName: 'Work Gloves',
     qty: 5,
     price: 9.99,
-    total: 49.95
+    total: 49.95,
+    taxRate: 0
   }],
 
   subtotal: 164.9,

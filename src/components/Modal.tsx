@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, ReactNode } from 'react';
 import { XIcon } from 'lucide-react';
 interface ModalProps {
   isOpen: boolean;

@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Sensitive / Local files
+.env
+hardware.db
+scratch/
+build/
+release-dist/
+backups/

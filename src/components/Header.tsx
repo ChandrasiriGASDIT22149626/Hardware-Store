@@ -24,10 +24,13 @@ const pageTitles: Record<
   sales: { title: 'Sales & Billing', breadcrumb: 'Operations / Sales' },
   purchasing: { title: 'Purchasing', breadcrumb: 'Operations / Purchasing' },
   customers: { title: 'Customer Management', breadcrumb: 'Management / Customers' },
-  employees: { title: 'Employee Management', breadcrumb: 'Management / Employees' },
-  accounting: { title: 'Accounting & Finance', breadcrumb: 'Finance / Accounting' },
+  suppliers: { title: 'Supplier Management', breadcrumb: 'Management / Suppliers' },
   reports: { title: 'Reports & Analytics', breadcrumb: 'Finance / Reports' },
-  settings: { title: 'Settings', breadcrumb: 'System / Settings' }
+  users: { title: 'Users & Roles', breadcrumb: 'System / Users & Roles' },
+  database: { title: 'Database', breadcrumb: 'System / Database' },
+  settings: { title: 'Settings', breadcrumb: 'System / Settings' },
+  finance: { title: 'Finance Ledger', breadcrumb: 'Finance / Ledger' },
+  audit_logs: { title: 'Audit Logs', breadcrumb: 'System / Audit Logs' }
 };
 
 const roleColors: Record<string, string> = {
@@ -58,7 +61,7 @@ export function Header({
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 gap-4 sticky top-0 z-10">
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center px-4 sm:px-6 gap-4 sticky top-0 z-10">
       {/* Mobile menu button */}
       <button
         onClick={onMenuToggle}
@@ -73,20 +76,10 @@ export function Header({
         <h1 className="text-lg font-bold text-slate-900 leading-none">
           {pageInfo.title}
         </h1>
-        <p className="text-xs text-slate-400 mt-0.5">{pageInfo.breadcrumb}</p>
+        <p className="text-xs text-slate-400 mt-0.5 hidden sm:block">{pageInfo.breadcrumb}</p>
       </div>
 
-      {/* Search */}
-      <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 w-64 focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-transparent transition-all">
-        <SearchIcon className="w-4 h-4 text-slate-400 flex-shrink-0" />
-        <input
-          type="text"
-          placeholder="Search..."
-          value={searchValue}
-          onChange={handleSearchChange}
-          className="bg-transparent text-sm text-slate-700 placeholder-slate-400 outline-none w-full" 
-        />
-      </div>
+
 
       {/* Notifications */}
       <button
@@ -98,9 +91,11 @@ export function Header({
         {/* Only show the red dot if there are actual unread notifications */}
         {unreadNotifications > 0 && (
           <span
-            className="absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full"
+            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#DAA520] text-white rounded-full flex items-center justify-center text-[9px] font-black border-2 border-white shadow-md animate-pulse"
             aria-hidden="true" 
-          />
+          >
+            {unreadNotifications}
+          </span>
         )}
       </button>
 

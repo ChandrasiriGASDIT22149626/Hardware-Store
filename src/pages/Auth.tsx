@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { EyeIcon, EyeOffIcon, AlertCircleIcon, ShieldCheckIcon, UserCogIcon, ShoppingCartIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { EyeIcon, EyeOffIcon, AlertCircleIcon, ShieldCheckIcon, GiftIcon, ThumbsUpIcon } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient'; 
-import type { User, UserRole } from '../types';
+import type { User } from '../types';
 
 interface AuthProps {
   onLogin: (user: User) => void;
@@ -13,55 +13,62 @@ export function Auth({ onLogin }: AuthProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
-  
-  // Default role for new signups is 'super_admin' (Mudalali)
-  const [signupRole, setSignupRole] = useState<UserRole>('super_admin');
+
+  const [shopSettings, setShopSettings] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const { data } = await supabase.from('system_settings').select('*').single();
+        if (data) setShopSettings(data);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Validations
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 4) {
+      setError('Password must be at least 4 characters.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      if (isSignUp) {
-        // Registration Logic
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { 
-              full_name: 'Shop Staff',
-              role: signupRole 
-            },
-          },
-        });
+      // Login Logic
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) throw signInError;
+
+      if (data.user) {
+        // Fetch the real, Super Admin approved role from the protected profiles table
+        const { data: profile } = await supabase.from('profiles').select('*').eq('email', data.user.email).single();
         
-        if (signUpError) throw signUpError;
-        alert('Registration successful! Please confirm your email.');
-        setIsSignUp(false); 
-      } else {
-        // Login Logic
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (signInError) throw signInError;
-
-        if (data.user) {
-          const roleFromMetadata = data.user.user_metadata?.role as UserRole;
-          console.log("Supabase returned Role:", roleFromMetadata);
-          
-          const loggedInUser: User = {
-            id: data.user.id,
-            email: data.user.email || '',
-            name: data.user.user_metadata?.full_name || 'Hardware Staff',
-            role: roleFromMetadata || 'retail_user', 
-            avatar: data.user.email?.charAt(0).toUpperCase() || 'U'
-          };
-          onLogin(loggedInUser);
-        }
+        const finalRole = profile?.role || data.user.user_metadata?.role || 'retail_user';
+        const finalName = profile?.name || data.user.user_metadata?.full_name || 'Hardware Staff';
+        
+        const loggedInUser: User = {
+          id: data.user.id,
+          email: data.user.email || '',
+          name: finalName,
+          role: finalRole, 
+          avatar: profile?.avatar || data.user.email?.charAt(0).toUpperCase() || 'U'
+        };
+        onLogin(loggedInUser);
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed.');
@@ -86,27 +93,27 @@ export function Auth({ onLogin }: AuthProps) {
           <div className="flex items-center gap-4 mb-12">
             <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-lg p-1.5 shrink-0">
               <img 
-                src="/images/logo.png" 
+                src={shopSettings?.logo_path || "./images/logo.png"} 
                 alt="Logo" 
                 className="w-full h-full object-contain"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             </div>
-            <div className="flex flex-col">
+            <div className="flex flex-col text-left">
               <span className="text-white font-black text-2xl tracking-tight leading-none mb-1">
-                MUTHUWADIGE
+                {(shopSettings?.shop_name || 'MUTHUWADIGE HARDWARE').split(' ')[0] || ''}
               </span>
               <span className="text-[#DAA520] font-black text-2xl tracking-widest leading-none">
-                HARDWARE
+                {(shopSettings?.shop_name || 'MUTHUWADIGE HARDWARE').split(' ').slice(1).join(' ') || ''}
               </span>
             </div>
           </div>
 
           <h2 className="text-5xl font-black text-white leading-[1.1] mb-6">
-            Manage your <br/> <span className="text-[#DAA520]">Hardware Business</span> <br/> with Confidence.
+            Your Trusted <br/> <span className="text-[#DAA520]">Hardware Partner</span> <br/> for Every Project.
           </h2>
           <p className="text-gray-300 text-lg font-medium max-w-md">
-            The complete multi-user ERP solution for Owners, Store Managers, and Cashiers.
+            Welcome to Muthuwadige Hardware. We offer premium building materials, tools, and outstanding services.
           </p>
         </div>
 
@@ -115,22 +122,22 @@ export function Auth({ onLogin }: AuthProps) {
           <div className="flex items-center gap-4 bg-white/5 backdrop-blur-sm p-5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
              <div className="p-3 bg-[#DAA520]/20 rounded-xl"><ShieldCheckIcon className="text-[#DAA520] w-6 h-6" /></div>
              <div>
-                <p className="text-white font-black text-sm">Super Admin</p>
-                <p className="text-gray-400 text-xs font-medium mt-0.5">Full control & Executive Finance Reports</p>
+                <p className="text-white font-black text-sm">Premium Quality</p>
+                <p className="text-gray-400 text-xs font-medium mt-0.5">100% genuine products from leading brands</p>
              </div>
           </div>
           <div className="flex items-center gap-4 bg-white/5 backdrop-blur-sm p-5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
-             <div className="p-3 bg-white/10 rounded-xl"><UserCogIcon className="text-white w-6 h-6" /></div>
+             <div className="p-3 bg-white/10 rounded-xl"><GiftIcon className="text-white w-6 h-6" /></div>
              <div>
-                <p className="text-white font-black text-sm">Shop Manager</p>
-                <p className="text-gray-400 text-xs font-medium mt-0.5">Inventory & Supplier Management</p>
+                <p className="text-white font-black text-sm">Loyalty Program</p>
+                <p className="text-gray-400 text-xs font-medium mt-0.5">Earn reward points and enjoy exclusive discounts</p>
              </div>
           </div>
           <div className="flex items-center gap-4 bg-white/5 backdrop-blur-sm p-5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
-             <div className="p-3 bg-white/10 rounded-xl"><ShoppingCartIcon className="text-gray-300 w-6 h-6" /></div>
+             <div className="p-3 bg-white/10 rounded-xl"><ThumbsUpIcon className="text-white w-6 h-6" /></div>
              <div>
-                <p className="text-white font-black text-sm">Cashier / Sales</p>
-                <p className="text-gray-400 text-xs font-medium mt-0.5">Billing, POS & Daily Transactions</p>
+                <p className="text-white font-black text-sm">Customer First</p>
+                <p className="text-gray-400 text-xs font-medium mt-0.5">Helpful staff, fast delivery, and expert recommendations</p>
              </div>
           </div>
         </div>
@@ -142,10 +149,10 @@ export function Auth({ onLogin }: AuthProps) {
           <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 p-10">
             
             <h1 className="text-3xl font-black text-[#464646] mb-2">
-              {isSignUp ? 'Business Registration' : 'Staff Login'}
+              Staff Login
             </h1>
             <p className="text-gray-500 mb-8 text-sm font-medium">
-              {isSignUp ? 'Select your role and create a new account' : 'Enter your credentials to access the ERP'}
+              Enter your credentials to access the ERP
             </p>
 
             {error && (
@@ -156,21 +163,6 @@ export function Auth({ onLogin }: AuthProps) {
             )}
 
             <form onSubmit={handleAuth} className="space-y-5">
-              {isSignUp && (
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">System Role</label>
-                  <select 
-                    value={signupRole}
-                    onChange={(e) => setSignupRole(e.target.value as UserRole)}
-                    className="w-full px-5 py-3.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#DAA520] outline-none text-sm font-bold text-[#464646] bg-gray-50/50 cursor-pointer"
-                  >
-                    <option value="super_admin">Super Admin (Shop Owner)</option>
-                    <option value="admin">Admin (Shop Manager)</option>
-                    <option value="retail_user">Retail User (Cashier)</option>
-                  </select>
-                </div>
-              )}
-
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Email Address</label>
                 <input
@@ -209,17 +201,12 @@ export function Auth({ onLogin }: AuthProps) {
                 disabled={isLoading}
                 className="w-full bg-[#DAA520] hover:bg-[#B8860B] text-white font-black py-4 rounded-xl transition-all shadow-lg shadow-[#DAA520]/20 uppercase tracking-widest text-xs mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isLoading ? 'Verifying Credentials...' : (isSignUp ? 'Register Account' : 'Secure Login')}
+                {isLoading ? 'Verifying Credentials...' : 'Secure Login'}
               </button>
             </form>
 
-            <div className="mt-8 text-center pt-6 border-t border-gray-100">
-              <button 
-                onClick={() => { setIsSignUp(!isSignUp); setError(''); }}
-                className="text-xs text-[#464646] hover:text-[#DAA520] font-black uppercase tracking-widest transition-colors"
-              >
-                {isSignUp ? '← Back to Login' : "Register a new shop account"}
-              </button>
+            <div className="mt-8 text-center pt-6 border-t border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+              🔒 SECURE LOCAL DATABASE ACTIVE
             </div>
             
           </div>

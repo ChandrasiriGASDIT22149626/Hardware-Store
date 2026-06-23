@@ -10,21 +10,24 @@ export interface Product {
   supplier: string;
   unit: string;
   barcode: string;
-  cost_Price:number;
-
-
+  brand?: string;
+  serialNo?: string;
+  batchCode?: string;
+  expiryDate?: string;
+  supplierPhone?: string;
+  measureDetails?: string;
 }
 
 export interface Customer {
   id: string;
   name: string;
-  email: string;
   phone: string;
   address: string;
+  nic?: string;
+  email?: string;
   loyaltyPoints: number;
   totalPurchases: number;
   joinDate: string;
-  customer_id: string;
 }
 
 export interface Supplier {
@@ -45,6 +48,10 @@ export interface SaleItem {
   price: number;
   total: number;
   taxRate: number;
+  serialNo?: string;
+  batchCode?: string;
+  unit?: string;
+  conversionRate?: number;
 }
 
 export interface SaleOrder {
@@ -58,11 +65,16 @@ export interface SaleOrder {
   discount: number;
   tax: number;
   total: number;
-  status: 'paid' | 'pending' | 'cancelled';
+  status: 'paid' | 'pending' | 'cancelled' | 'Paid' | 'Non Paid';
   date: string;
   cashier: string;
-  total_amount: number;
-  created_at: string;
+  total_amount?: number;
+  created_at?: string;
+  tax_rate?: number;
+  payment_method?: string;
+  due_date?: string;
+  credit_period_days?: number;
+  payment_received?: number;
 }
 
 export interface PurchaseItem {
@@ -107,14 +119,6 @@ export interface Transaction {
   date: string;
   reference: string;
 }
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'manager' | 'cashier';
-  avatar: string;
-}
 // 1. Define all possible roles in one place
 export type UserRole = 'super_admin' | 'admin' | 'manager' | 'cashier' | 'retail_user';
 
@@ -134,7 +138,28 @@ export type PageName =
   | 'sales' 
   | 'purchasing' 
   | 'customers' 
-  | 'accounting' 
-  | 'employees' 
+  | 'suppliers'
   | 'reports' 
-  | 'settings';
+  | 'users'
+  | 'database'
+  | 'settings'
+  | 'finance'
+  | 'audit_logs';
+
+export interface Quotation {
+  id: string;
+  quote_no: string;
+  customer_name: string;
+  items: string; // JSON string representation of SaleItem[]
+  total: number;
+  created_at: string;
+}
+
+export interface DeliveryNote {
+  id: string;
+  dn_no: string;
+  customer_name: string;
+  items: string; // JSON string representation of SaleItem[]
+  reference_invoice: string;
+  created_at: string;
+}

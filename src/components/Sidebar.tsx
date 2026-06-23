@@ -1,19 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboardIcon,
   PackageIcon,
   ShoppingCartIcon,
   TruckIcon,
   UsersIcon,
-  UserCheckIcon,
   DollarSignIcon,
   BarChart3Icon,
   SettingsIcon,
+  DatabaseIcon,
+  ShieldIcon,
   ChevronRightIcon,
   LogOutIcon
 } from 'lucide-react';
 import type { PageName, User } from '../types';
 import { ROLE_PERMISSIONS } from '../utils/permissions';
+import { supabase } from '../lib/supabaseClient';
 
 interface SidebarProps {
   currentPage: PageName;
@@ -22,6 +24,7 @@ interface SidebarProps {
   onLogout: () => void;
   isOpen: boolean;
   onClose: () => void;
+  setSalesTab?: (tab: 'new' | 'history' | 'credit' | 'quotes' | 'delivery') => void;
 }
 
 interface NavItem {
@@ -52,19 +55,29 @@ const navGroups: NavGroup[] = [
     label: 'MANAGEMENT',
     items: [
       { id: 'customers', label: 'Customers', icon: <UsersIcon className="w-5 h-5" /> },
-      { id: 'employees', label: 'Employees', icon: <UserCheckIcon className="w-5 h-5" /> }
+      { id: 'suppliers', label: 'Suppliers', icon: <TruckIcon className="w-5 h-5" /> }
     ]
   },
   {
     label: 'FINANCE',
     items: [
-      { id: 'accounting', label: 'Accounting', icon: <DollarSignIcon className="w-5 h-5" /> },
-      { id: 'reports', label: 'Reports', icon: <BarChart3Icon className="w-5 h-5" /> }
+      { id: 'reports', label: 'Reports', icon: <BarChart3Icon className="w-5 h-5" /> },
+      { id: 'finance', label: 'Finance & Accounts', icon: <DollarSignIcon className="w-5 h-5" /> }
+    ]
+  },
+  {
+    label: 'ADMINISTRATION',
+    items: [
+      { id: 'users', label: 'Users & Roles', icon: <ShieldIcon className="w-5 h-5" /> },
+      { id: 'database', label: 'Database', icon: <DatabaseIcon className="w-5 h-5" /> },
+      { id: 'audit_logs', label: 'Audit Logs', icon: <ShieldIcon className="w-5 h-5" /> }
     ]
   },
   {
     label: 'SYSTEM',
-    items: [{ id: 'settings', label: 'Settings', icon: <SettingsIcon className="w-5 h-5" /> }]
+    items: [
+      { id: 'settings', label: 'Settings', icon: <SettingsIcon className="w-5 h-5" /> }
+    ]
   }
 ];
 
@@ -81,9 +94,31 @@ export function Sidebar({
   currentUser,
   onLogout,
   isOpen,
-  onClose
+  onClose,
+  setSalesTab
 }: SidebarProps) {
   
+  const [, setPermissionsTick] = useState(0);
+  const [shopSettings, setShopSettings] = useState<any>(null);
+
+  const fetchSettings = async () => {
+    try {
+      const { data } = await supabase.from('system_settings').select('*').single();
+      if (data) setShopSettings(data);
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchSettings();
+    const handlePermsUpdate = () => setPermissionsTick(t => t + 1);
+    window.addEventListener('permissions-updated', handlePermsUpdate);
+    window.addEventListener('settings-updated', fetchSettings);
+    return () => {
+      window.removeEventListener('permissions-updated', handlePermsUpdate);
+      window.removeEventListener('settings-updated', fetchSettings);
+    };
+  }, []);
+
   // ROLE FILTERING LOGIC
   const allowedPages = ROLE_PERMISSIONS[currentUser.role] || [];
   
@@ -116,18 +151,18 @@ export function Sidebar({
           {/* Logo container with a white background to make the PNG pop */}
           <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg p-1">
             <img 
-              src="/images/logo.png" 
+              src={shopSettings?.logo_path || "./images/logo.png"} 
               alt="Muthuwadige Logo" 
               className="w-full h-full object-contain"
               onError={(e) => { e.currentTarget.style.display = 'none'; }} // Hides image icon if image fails to load
             />
           </div>
-          <div className="flex flex-col justify-center">
+          <div className="flex flex-col justify-center text-left">
             <span className="text-white font-bold text-[15px] tracking-tight leading-none mb-1">
-              MUTHUWADIGE
+              {(shopSettings?.shop_name || 'MUTHUWADIGE HARDWARE').split(' ')[0] || ''}
             </span>
             <span className="text-[#DAA520] font-black text-[15px] leading-none">
-              HARDWARE
+              {(shopSettings?.shop_name || 'MUTHUWADIGE HARDWARE').split(' ').slice(1).join(' ') || ''}
             </span>
           </div>
         </div>
@@ -148,6 +183,9 @@ export function Sidebar({
                     <button
                       key={item.id}
                       onClick={() => {
+                        if (item.id === 'sales' && setSalesTab) {
+                          setSalesTab('new');
+                        }
                         setCurrentPage(item.id);
                         onClose(); // Auto close on mobile
                       }}
