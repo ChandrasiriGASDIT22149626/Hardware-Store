@@ -39,9 +39,13 @@ export const setApiUrl = (newUrl: string | null) => {
 async function handleError(res: Response, fallback: string): Promise<never> {
   let message = fallback;
   try {
-    const err = await res.json();
-    if (err && err.error) {
-      message = err.error;
+    if (res.headers.get('content-type')?.includes('application/json')) {
+      const err = await res.json();
+      if (err && err.error) {
+        message = err.error;
+      }
+    } else {
+      message = `${fallback} (Status code: ${res.status})`;
     }
   } catch (_) {}
   throw new Error(message);
@@ -56,10 +60,28 @@ export const api = {
         body: JSON.stringify({ email, password })
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Authentication failed');
+        let message = 'Authentication failed';
+        try {
+          if (res.headers.get('content-type')?.includes('application/json')) {
+            const err = await res.json();
+            message = err.error || message;
+          } else {
+            message = `Server connection error (Status ${res.status}). Verify your Host Server configuration.`;
+          }
+        } catch (_) {}
+        throw new Error(message);
       }
-      const data = await res.json();
+      
+      let data;
+      try {
+        if (res.headers.get('content-type')?.includes('application/json')) {
+          data = await res.json();
+        } else {
+          throw new Error('Server did not return a valid JSON response.');
+        }
+      } catch (e: any) {
+        throw new Error(e.message || 'Failed to parse authentication response.');
+      }
       return { data, error: null };
     },
     register: async (email: string, password?: string, name?: string, role?: string) => {
@@ -69,10 +91,28 @@ export const api = {
         body: JSON.stringify({ email, password, name, role })
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Registration failed');
+        let message = 'Registration failed';
+        try {
+          if (res.headers.get('content-type')?.includes('application/json')) {
+            const err = await res.json();
+            message = err.error || message;
+          } else {
+            message = `Server connection error (Status ${res.status})`;
+          }
+        } catch (_) {}
+        throw new Error(message);
       }
-      const data = await res.json();
+      
+      let data;
+      try {
+        if (res.headers.get('content-type')?.includes('application/json')) {
+          data = await res.json();
+        } else {
+          throw new Error('Server did not return a valid JSON response.');
+        }
+      } catch (e: any) {
+        throw new Error(e.message || 'Failed to parse registration response.');
+      }
       return { data, error: null };
     },
     getUser: async () => {

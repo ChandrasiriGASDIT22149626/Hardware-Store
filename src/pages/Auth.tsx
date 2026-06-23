@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { EyeIcon, EyeOffIcon, AlertCircleIcon, ShieldCheckIcon, GiftIcon, ThumbsUpIcon } from 'lucide-react';
+import { EyeIcon, EyeOffIcon, AlertCircleIcon, ShieldCheckIcon, GiftIcon, ThumbsUpIcon, Loader2Icon, SettingsIcon, XIcon, CheckIcon } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient'; 
+import { setApiUrl, API_URL } from '../lib/api';
 import type { User } from '../types';
 
 interface AuthProps {
@@ -15,18 +16,85 @@ export function Auth({ onLogin }: AuthProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const [shopSettings, setShopSettings] = useState<any>(null);
+  
+  const [showConnectionSettings, setShowConnectionSettings] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
+  const [hostAddressInput, setHostAddressInput] = useState(
+    localStorage.getItem('erp_host_address') || 'http://localhost:5001'
+  );
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionTestResult, setConnectionTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const { data } = await supabase.from('system_settings').select('*').single();
-        if (data) setShopSettings(data);
+        const { data, error } = await supabase.from('system_settings').select('*').single();
+        if (error) throw error;
+        if (data) {
+          setShopSettings(data);
+          setConnectionError(false);
+        }
       } catch (err) {
         console.error(err);
+        setConnectionError(true);
       }
     };
     fetchSettings();
   }, []);
+
+  const handleTestConnection = async () => {
+    if (!hostAddressInput) {
+      setConnectionTestResult({ success: false, message: 'Please enter a host address.' });
+      return;
+    }
+    
+    let cleanAddress = hostAddressInput.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(cleanAddress)) {
+      cleanAddress = `http://${cleanAddress}`;
+    }
+    
+    setIsTestingConnection(true);
+    setConnectionTestResult(null);
+    
+    try {
+      const res = await fetch(`${cleanAddress}/api/settings`);
+      if (res.ok) {
+        setConnectionTestResult({ 
+          success: true, 
+          message: 'Connection successful! Host is online.' 
+        });
+      } else {
+        setConnectionTestResult({ 
+          success: false, 
+          message: `Failed to connect (Status: ${res.status}). Verify this is a Muthuwadige ERP host.` 
+        });
+      }
+    } catch (err: any) {
+      setConnectionTestResult({ 
+        success: false, 
+        message: `Connection failed: ${err.message || 'Host is unreachable.'}` 
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  const handleSaveConnection = (e: React.FormEvent) => {
+    e.preventDefault();
+    let cleanAddress = hostAddressInput.trim().replace(/\/$/, '');
+    if (!cleanAddress) {
+      setApiUrl(null);
+      alert("Switched to Standalone Host mode. The application will reload.");
+      window.location.reload();
+      return;
+    }
+    if (!/^https?:\/\//i.test(cleanAddress)) {
+      cleanAddress = `http://${cleanAddress}`;
+    }
+    setApiUrl(cleanAddress);
+    alert(`Connected to Host: ${cleanAddress}. Reloading app...`);
+    window.location.reload();
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,6 +223,25 @@ export function Auth({ onLogin }: AuthProps) {
               Enter your credentials to access the ERP
             </p>
 
+            {connectionError && (
+              <div className="flex flex-col gap-1.5 bg-amber-50 border border-amber-100 text-amber-800 rounded-xl px-5 py-4 mb-6 text-xs font-bold animate-in slide-in-from-top-2 text-left">
+                <div className="flex items-center gap-2">
+                  <AlertCircleIcon className="w-5 h-5 flex-shrink-0 text-amber-600" />
+                  <span>Cannot connect to database server</span>
+                </div>
+                <p className="text-gray-500 font-medium text-[11px] leading-relaxed">
+                  The local database server is unreachable at <code className="bg-amber-100/50 px-1 py-0.5 rounded font-mono font-bold">{API_URL}</code>. If this app is hosted on Vercel or running on a client machine, please update the Server Address.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowConnectionSettings(true)}
+                  className="text-amber-800 hover:text-amber-950 underline text-left w-fit mt-1"
+                >
+                  Configure Connection Settings
+                </button>
+              </div>
+            )}
+
             {error && (
               <div className="flex items-center gap-3 bg-red-50 border border-red-100 text-red-600 rounded-xl px-5 py-4 mb-6 text-sm font-bold animate-in slide-in-from-top-2">
                 <AlertCircleIcon className="w-5 h-5 flex-shrink-0" />
@@ -205,13 +292,115 @@ export function Auth({ onLogin }: AuthProps) {
               </button>
             </form>
 
-            <div className="mt-8 text-center pt-6 border-t border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              🔒 SECURE LOCAL DATABASE ACTIVE
+            <div className="mt-8 text-center pt-6 border-t border-gray-100 flex flex-col items-center gap-2">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                {localStorage.getItem('erp_host_address') ? '📡 Connected to Remote Host' : '🔒 SECURE LOCAL DATABASE ACTIVE'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConnectionSettings(true)}
+                className="text-[10px] font-black text-[#DAA520] hover:text-[#B8860B] uppercase tracking-wider transition-colors hover:underline flex items-center gap-1"
+              >
+                <SettingsIcon className="w-3.5 h-3.5" />
+                Connection Settings
+              </button>
             </div>
             
           </div>
         </div>
       </div>
+
+      {/* Connection Settings Modal */}
+      {showConnectionSettings && (
+        <div className="fixed inset-0 bg-[#464646]/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <form onSubmit={handleSaveConnection} className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 space-y-5 animate-in zoom-in-95 text-left">
+            <div className="flex justify-between items-center mb-2">
+              <div>
+                <h3 className="font-black text-xl text-[#464646]">Connection Settings</h3>
+                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">Configure Database API Host</p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setShowConnectionSettings(false);
+                  setConnectionTestResult(null);
+                }} 
+                className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Host Server Address / IP</label>
+                <input 
+                  type="text" 
+                  value={hostAddressInput} 
+                  onChange={e => setHostAddressInput(e.target.value)} 
+                  placeholder="e.g. http://192.168.1.50:5001 or localhost:5001" 
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#DAA520] font-mono font-bold text-xs text-slate-700 bg-white" 
+                />
+                <p className="text-[9px] text-gray-400 mt-1 font-bold">
+                  Enter the IP and Port of your local server laptop (e.g. <code className="font-mono">192.168.1.100:5001</code>). If hosted remotely, enter the public domain or ngrok/tunnel URL.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button 
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={isTestingConnection || !hostAddressInput}
+                  className="px-4 py-2.5 bg-[#464646] hover:bg-[#333333] disabled:bg-gray-200 disabled:text-gray-400 text-white text-[10px] font-black rounded-xl uppercase tracking-widest transition-all shadow-md flex items-center gap-1.5"
+                >
+                  {isTestingConnection && <Loader2Icon className="w-3.5 h-3.5 animate-spin" />}
+                  Test Connection
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setHostAddressInput('');
+                    setConnectionTestResult(null);
+                  }}
+                  className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-black rounded-xl uppercase tracking-widest transition-all"
+                >
+                  Reset / Standalone
+                </button>
+              </div>
+
+              {connectionTestResult && (
+                <div className={`p-3.5 rounded-xl border text-xs font-bold ${
+                  connectionTestResult.success 
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                    : 'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                  {connectionTestResult.message}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t border-gray-100">
+              <button 
+                type="button" 
+                onClick={() => {
+                  setShowConnectionSettings(false);
+                  setConnectionTestResult(null);
+                }} 
+                className="flex-1 py-3.5 font-black text-gray-500 hover:bg-gray-100 rounded-xl uppercase tracking-widest text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit" 
+                className="flex-1 py-3.5 font-black bg-[#DAA520] hover:bg-[#B8860B] text-white rounded-xl shadow-lg shadow-[#DAA520]/20 uppercase tracking-widest text-xs transition-all"
+              >
+                Save & Reload
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
